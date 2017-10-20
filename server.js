@@ -198,19 +198,47 @@ class Database extends ConfigurationProvider {
 const _DATABASE = new Database({
   version: VERSION,
 });
-console.info(`Database initialized`, _DATABASE);
 
 /* API */
-class API extends ConfigurationProvider {
-  constructor(config) {
-    super(config);
+class API {
+  constructor(database) {
+    this.database = database;
+  }
+
+  getHeadshop(id) {
+    return JSON.stringify(this.database.headshopsById.get(+id));
+  }
+
+  getHeadshops() {
+    return JSON.stringify([...this.database.headshopsById]);
+  }
+
+  getArtist(id) {
+    return JSON.stringify(this.database.artistsById.get(+id));
+  }
+
+  getArtists() {
+    return JSON.stringify([...this.database.artistsById]);
+  }
+
+  getPiece(id) {
+    return JSON.stringify(this.database.piecesById.get(+id));
+  }
+
+  getPieces() {
+    return JSON.stringify([...this.database.piecesById]);
+  }
+
+  getPiecesByHeadshop() {        
+    return JSON.stringify([...this.database.piecesByHeadshopId]);
+  }
+
+  getPiecesByArtist() {
+    return JSON.stringify([...this.database.piecesByArtistId]);
   }
 }
 
-const _API = new API({
-  version: VERSION,
-});
-console.info(`API initialized`, _API);
+const _API = new API(_DATABASE);
 
 /* Server */
 const express = require('express');
@@ -218,5 +246,30 @@ const app = express();
 const port = process.env.PORT || 6166;
 
 app.get('/', (req, res) => res.send(`Glassfinder API v. ${VERSION}`));
+
+app.get('/headshops', (req, res) => {
+  res.send(_API.getHeadshops());
+});
+
+app.get('/headshops/:id', (req, res) => {
+  const id = req.params.id;
+  res.send(_API.getHeadshop(req.params.id));
+});
+
+app.get('/artists', (req, res) => {
+  res.send(_API.getArtists());
+});
+
+app.get('/artists/:id', ({ params: { id } }, res) => {
+  res.send(_API.getArtist(id));
+});
+
+app.get('/pieces', (req, res) => {
+  res.send(_API.getPieces());
+});
+
+app.get('/pieces/:id', ({ params: { id } }, res) => {
+  res.send(_API.getPiece(id));
+});
 
 app.listen(port, () => console.info(`Glassfinder API listening on port ${port}`));
