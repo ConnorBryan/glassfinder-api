@@ -2,12 +2,10 @@
 /* Constants */
 const VERSION = '1.0.0';
 const CHANCE = new (require('chance'))();
-CHANCE.phone = () => (
-  `${ CHANCE.integer({ min: 100, max: 999 }) }-${ CHANCE.integer({ min: 100, max: 999 }) }-${ CHANCE.integer({ min: 1000, max: 9999 }) }`
-);
+
 const ModelTypes = {
-  HEADSHOP: 0,
-  ARTIST: 1,
+  HEADSHOP: 'Headshop',
+  ARTIST: 'Artist',
 };
 
 /* Abstracts */
@@ -32,7 +30,7 @@ const generateModelConfig = config => Object.assign({
   id: 0,
   name: CHANCE.name(),
   image: 'https://placehold.it/400x400',
-  phone: CHANCE.phone(),
+  phone: `${ CHANCE.integer({ min: 100, max: 999 }) }-${ CHANCE.integer({ min: 100, max: 999 }) }-${ CHANCE.integer({ min: 1000, max: 9999 }) }`,
   email: CHANCE.email(),
   address: {
     street: CHANCE.address(),
@@ -48,6 +46,7 @@ const generateModelConfig = config => Object.assign({
 
 /**
  * @class Headshop
+ * Headshop HAS-MANY Pieces
  */
 class Headshop extends Model {
   constructor(config) {
@@ -66,6 +65,7 @@ const generateHeadshop = config => {
 
 /**
  * @class Artist
+ * Artist HAS-MANY Pieces
  */
 class Artist extends Model {
   constructor(config) {
@@ -79,11 +79,6 @@ const generateArtist = config => {
 
   return new Artist(modelConfig);
 };
-
-const h = generateHeadshop();
-const a = generateArtist();
-
-console.log(h, a);
 
 /**
  * @class Piece
@@ -112,15 +107,16 @@ class Database extends ConfigurationProvider {
   constructor(config) {
     super(config);
 
-    this.headshopsById = new Map();
-    this.artistsById = new Map();
-    this.piecesById = new Map();
+    this.headshopsById      = new Map();
+    this.artistsById        = new Map();
+    this.piecesById         = new Map();
     this.piecesByHeadshopId = new Map();
-    this.piecesByArtistId = new Map();
+    this.piecesByArtistId   = new Map();
 
     this
       .initializeHeadshops()
-      .initalizeArtists();
+      .initalizeArtists()
+      .initializePieces();
   }
 
   initializeModels(map, generateModel, min = 20, max = 100) {
@@ -144,6 +140,58 @@ class Database extends ConfigurationProvider {
 
   initalizeArtists() {
     return this.initializeModels(this.artistsById, generateArtist);
+  }
+
+  initializePieces() {
+    let count = CHANCE.integer({ min: 100, max: 1000 });
+    let id = 0;
+
+    while (count) {
+      const nextId = ++id;
+      const seed = CHANCE.pickone(['headshop', 'artist', 'headshop and artist']);
+      const piece = generatePiece({
+        id: nextId
+      });
+      
+      const { size: headshopsSize } = this.headshopsById;
+      const headshopId = CHANCE.integer({ min: 1, max: headshopsSize });
+      const piecesByHeadshopId = this.piecesByHeadshopId.get(headshopId) || [];
+      
+      const { size: artistsSize } = this.artistsById;
+      const artistId = CHANCE.integer({ min: 1, max: artistsSize });
+      const piecesByArtistId = this.piecesByArtistId.get(artistId) || [];        
+      
+      if (seed === 'headshop') {
+        piece.headshopId = headshopId;
+
+        this.piecesById.set(nextId, piece);
+        this.piecesByHeadshopId.set(headshopId, [...piecesByHeadshopId, piece]);
+
+        count--;
+
+        continue;
+      }
+
+      if (seed === 'artist') {
+        piece.artistId = artistId;
+
+        this.piecesById.set(nextId, piece);
+        this.piecesByArtistId.set(artistId, [...piecesByHeadshopId, piece]);
+
+        count--;
+
+        continue;
+      }
+      
+      piece.headshopId = headshopId;
+      piece.artistId = artistId;
+
+      this.piecesById.set(nextId, piece);
+      this.piecesByHeadshopId.set(headshopId, [...piecesByHeadshopId, piece]);
+      this.piecesByArtistId.set(artistId, [...piecesByHeadshopId, piece]);
+
+      count--;
+    }
   }
 }
 
