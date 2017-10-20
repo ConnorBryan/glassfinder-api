@@ -111,6 +111,39 @@ const generatePiece = config => Object.assign(new Piece({
 class Database extends ConfigurationProvider {
   constructor(config) {
     super(config);
+
+    this.headshopsById = new Map();
+    this.artistsById = new Map();
+    this.piecesById = new Map();
+    this.piecesByHeadshopId = new Map();
+    this.piecesByArtistId = new Map();
+
+    this
+      .initializeHeadshops()
+      .initalizeArtists();
+  }
+
+  initializeModels(map, generateModel, min = 20, max = 100) {
+    let count = CHANCE.integer({ min, max });
+    let id = 0;
+
+    while (count) {
+      const nextId = ++id;
+      map.set(nextId, generateModel({
+        id: nextId,
+      }));
+      count--;
+    }
+
+    return this;
+  }
+  
+  initializeHeadshops() {
+    return this.initializeModels(this.headshopsById, generateHeadshop);
+  }
+
+  initalizeArtists() {
+    return this.initializeModels(this.artistsById, generateArtist);
   }
 }
 
