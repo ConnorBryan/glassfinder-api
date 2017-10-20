@@ -1,0 +1,11 @@
+{
+  "name": "glassfinder-api",
+  "version": "1.0.0",
+  "description": "The primary API layer for Glassfinder",
+  "main": "server.js",
+  "author": "Connor Bryan",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.16.2"
+  }
+}
