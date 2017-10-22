@@ -32,6 +32,10 @@ const generateModelConfig = config => Object.assign({
   image: 'https://placehold.it/400x400',
   phone: `${ CHANCE.integer({ min: 100, max: 999 }) }-${ CHANCE.integer({ min: 100, max: 999 }) }-${ CHANCE.integer({ min: 1000, max: 9999 }) }`,
   email: CHANCE.email(),
+  tagline: CHANCE.sentence({ words: 4 }),
+  description: CHANCE.paragraph({ sentences: 5 }),
+  memberSince: CHANCE.date({ string: true }),
+  rating: CHANCE.floating({ min: 0, max: 5, fixed: 2 }),
   address: {
     street: CHANCE.address(),
     city: CHANCE.city(),
@@ -97,7 +101,9 @@ const generatePiece = config => Object.assign(new Piece({
     artistId: 0,
     name: CHANCE.capitalize(CHANCE.word()),
     description: CHANCE.paragraph({ sentences: 5 }),
-    price: `$${ CHANCE.floating({ min: 10, max: 300, fixed: 2 }) }`,
+    price: CHANCE.dollar(),
+    tagline: CHANCE.sentence({ words: 5 }),
+    rating: CHANCE.floating({ min: 0, max: 5, fixed: 2 }),
     image: 'https://placehold.it/400x400',
     images: [],
 }), config);
@@ -125,8 +131,18 @@ class Database extends ConfigurationProvider {
 
     while (count) {
       const nextId = ++id;
+      const images = [];
+
+      let imageCount = CHANCE.integer({ min: 1, max: 40 });
+
+      while (imageCount) {
+        images.push('http://placehold.it/400x400');
+        imageCount--;
+      }
+
       map.set(nextId, generateModel({
         id: nextId,
+        images
       }));
       count--;
     }
@@ -152,7 +168,17 @@ class Database extends ConfigurationProvider {
       const piece = generatePiece({
         id: nextId
       });
+      const images = [];
+
+      let imageCount = CHANCE.integer({ min: 1, max: 40 });
+
+      while (imageCount) {
+        images.push('http://placehold.it/400x400');
+        imageCount--;
+      }
       
+      piece.images = images;
+
       const { size: headshopsSize } = this.headshopsById;
       const headshopId = CHANCE.integer({ min: 1, max: headshopsSize });
       const piecesByHeadshopId = this.piecesByHeadshopId.get(headshopId) || [];
@@ -161,8 +187,15 @@ class Database extends ConfigurationProvider {
       const artistId = CHANCE.integer({ min: 1, max: artistsSize });
       const piecesByArtistId = this.piecesByArtistId.get(artistId) || [];        
       
+      const relevantHeadshop = this.headshopsById.get(headshopId);   
+
       if (seed === 'headshop') {
+
         piece.headshopId = headshopId;
+        piece.owner = relevantHeadshop.name;
+        piece.address = relevantHeadshop.address;       
+        piece.phone = relevantHeadshop.phone;
+        piece.email = relevantHeadshop.email;
 
         this.piecesById.set(nextId, piece);
         this.piecesByHeadshopId.set(headshopId, [...piecesByHeadshopId, piece]);
@@ -173,22 +206,33 @@ class Database extends ConfigurationProvider {
       }
 
       if (seed === 'artist') {
+        const relevantArtist = this.artistsById.get(artistId);
+
         piece.artistId = artistId;
+        piece.owner = relevantArtist.name;
+        piece.address = relevantArtist.address;
+        piece.phone = relevantArtist.phone;
+        piece.email = relevantArtist.email;
 
         this.piecesById.set(nextId, piece);
-        this.piecesByArtistId.set(artistId, [...piecesByHeadshopId, piece]);
+        this.piecesByArtistId.set(artistId, [...piecesByArtistId, piece]);
 
         count--;
 
         continue;
       }
-      
+
+            
       piece.headshopId = headshopId;
       piece.artistId = artistId;
+      piece.owner = relevantHeadshop.name;
+      piece.address = relevantHeadshop.address;       
+      piece.phone = relevantHeadshop.phone;
+      piece.email = relevantHeadshop.email;
 
       this.piecesById.set(nextId, piece);
       this.piecesByHeadshopId.set(headshopId, [...piecesByHeadshopId, piece]);
-      this.piecesByArtistId.set(artistId, [...piecesByHeadshopId, piece]);
+      this.piecesByArtistId.set(artistId, [...piecesByArtistId, piece]);
 
       count--;
     }
@@ -229,12 +273,12 @@ class API {
     return JSON.stringify([...this.database.piecesById]);
   }
 
-  getPiecesByHeadshop() {        
-    return JSON.stringify([...this.database.piecesByHeadshopId]);
+  getPiecesByHeadshop(id) {        
+    return JSON.stringify(this.database.piecesByHeadshopId.get(+id));
   }
 
-  getPiecesByArtist() {
-    return JSON.stringify([...this.database.piecesByArtistId]);
+  getPiecesByArtist(id) {
+    return JSON.stringify(this.database.piecesByArtistId.get(+id));
   }
 }
 
@@ -245,15 +289,20 @@ const express = require('express');
 const app = express();
 const port = process.env.PORT || 6166;
 
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+  next();
+});
+
 app.get('/', (req, res) => res.send(`Glassfinder API v. ${VERSION}`));
 
 app.get('/headshops', (req, res) => {
   res.send(_API.getHeadshops());
 });
 
-app.get('/headshops/:id', (req, res) => {
-  const id = req.params.id;
-  res.send(_API.getHeadshop(req.params.id));
+app.get('/headshops/:id', ({ params: { id } }, res) => {
+  res.send(_API.getHeadshop(id));
 });
 
 app.get('/artists', (req, res) => {
@@ -270,6 +319,14 @@ app.get('/pieces', (req, res) => {
 
 app.get('/pieces/:id', ({ params: { id } }, res) => {
   res.send(_API.getPiece(id));
+});
+
+app.get('/pieces/headshop/:id', ({ params: { id } }, res) => {
+  res.send(_API.getPiecesByHeadshop(id));
+});
+
+app.get('/pieces/artist/:id', ({ params: { id } }, res) => {
+  res.send(_API.getPiecesByArtist(id));
 });
 
 app.listen(port, () => console.info(`Glassfinder API listening on port ${port}`));
