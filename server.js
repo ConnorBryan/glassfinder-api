@@ -1,332 +1,410 @@
-
-/* Constants */
-const VERSION = '1.0.0';
+/**
+ * @overview
+ * A model is a single named type that
+ *  a) Exists in the database.
+ *  b) Shared relationships with other models.
+ *  c) Provides a set of common routes to retrieve data from the database.
+ * 
+ *  Routes for each model:
+ *    1) /<plural>?[filter=id, page=0]
+ *      Returns: A collection of models, sorted by ID.
+ *               If a filter is provided, the collection is sorted by said filter.
+ *               If a page is provided, that subsection is given.
+ *    2) /<singular>/:id
+ *      Returns: A single model at the given ID.
+ */
 const CHANCE = new (require('chance'))();
-
-const ModelTypes = {
-  HEADSHOP: 'Headshop',
-  ARTIST: 'Artist',
-};
-
-/* Abstracts */
-class ConfigurationProvider {
-  constructor(config) {
-    Object.assign(this, config);
-  }
-}
-
-/* Models */
-/**
- * @abstract Model
- * Base-level component for common fields.
- */
-class Model extends ConfigurationProvider {
-  constructor(config) {
-    super(config);
-  }
-}
-
-const generateModelConfig = config => Object.assign({
-  id: 0,
-  name: CHANCE.name(),
-  image: 'https://placehold.it/400x400',
-  phone: `${ CHANCE.integer({ min: 100, max: 999 }) }-${ CHANCE.integer({ min: 100, max: 999 }) }-${ CHANCE.integer({ min: 1000, max: 9999 }) }`,
-  email: CHANCE.email(),
-  tagline: CHANCE.sentence({ words: 4 }),
-  description: CHANCE.paragraph({ sentences: 5 }),
-  memberSince: CHANCE.date({ string: true }),
-  rating: CHANCE.floating({ min: 0, max: 5, fixed: 2 }),
-  address: {
-    street: CHANCE.address(),
-    city: CHANCE.city(),
-    state: CHANCE.state(),
-    zip: CHANCE.zip(),
-  },
-  position: {
-    lat: CHANCE.latitude(),
-    lng: CHANCE.longitude(),
-  }
-}, config);
-
-/**
- * @class Headshop
- * Headshop HAS-MANY Pieces
- */
-class Headshop extends Model {
-  constructor(config) {
-    super(config);
-    this.type = ModelTypes.HEADSHOP;
-  }
-}
-
-const generateHeadshop = config => {
-  const modelConfig = generateModelConfig(config);
-  
-  modelConfig.name = CHANCE.capitalize(CHANCE.word());
-
-  return new Headshop(modelConfig);
-};
-
-/**
- * @class Artist
- * Artist HAS-MANY Pieces
- */
-class Artist extends Model {
-  constructor(config) {
-    super(config);
-    this.type = ModelTypes.ARTIST;
-  }
-}
-
-const generateArtist = config => {
-  const modelConfig = generateModelConfig(config);
-
-  return new Artist(modelConfig);
-};
-
-/**
- * @class Piece
- * Piece BELONGS-TO Headshop
- * Piece BELONGS-TO Artist
- */
-class Piece {
-  constructor(config) {
-    Object.assign(this, config);
-  }
-}
-
-const generatePiece = config => Object.assign(new Piece({
-    id: 0,
-    headshopId: 0,
-    artistId: 0,
-    name: CHANCE.capitalize(CHANCE.word()),
-    description: CHANCE.paragraph({ sentences: 5 }),
-    price: CHANCE.dollar(),
-    tagline: CHANCE.sentence({ words: 5 }),
-    rating: CHANCE.floating({ min: 0, max: 5, fixed: 2 }),
-    image: 'https://placehold.it/400x400',
-    images: [],
-}), config);
-
-/* Database */
-class Database extends ConfigurationProvider {
-  constructor(config) {
-    super(config);
-
-    this.headshopsById      = new Map();
-    this.artistsById        = new Map();
-    this.piecesById         = new Map();
-    this.piecesByHeadshopId = new Map();
-    this.piecesByArtistId   = new Map();
-
-    this
-      .initializeHeadshops()
-      .initalizeArtists()
-      .initializePieces();
-  }
-
-  initializeModels(map, generateModel, min = 20, max = 100) {
-    let count = CHANCE.integer({ min, max });
-    let id = 0;
-
-    while (count) {
-      const nextId = ++id;
-      const images = [];
-
-      let imageCount = CHANCE.integer({ min: 1, max: 40 });
-
-      while (imageCount) {
-        images.push('http://placehold.it/400x400');
-        imageCount--;
-      }
-
-      map.set(nextId, generateModel({
-        id: nextId,
-        images
-      }));
-      count--;
-    }
-
-    return this;
-  }
-  
-  initializeHeadshops() {
-    return this.initializeModels(this.headshopsById, generateHeadshop);
-  }
-
-  initalizeArtists() {
-    return this.initializeModels(this.artistsById, generateArtist);
-  }
-
-  initializePieces() {
-    let count = CHANCE.integer({ min: 100, max: 1000 });
-    let id = 0;
-
-    while (count) {
-      const nextId = ++id;
-      const seed = CHANCE.pickone(['headshop', 'artist', 'headshop and artist']);
-      const piece = generatePiece({
-        id: nextId
-      });
-      const images = [];
-
-      let imageCount = CHANCE.integer({ min: 1, max: 40 });
-
-      while (imageCount) {
-        images.push('http://placehold.it/400x400');
-        imageCount--;
-      }
-      
-      piece.images = images;
-
-      const { size: headshopsSize } = this.headshopsById;
-      const headshopId = CHANCE.integer({ min: 1, max: headshopsSize });
-      const piecesByHeadshopId = this.piecesByHeadshopId.get(headshopId) || [];
-      
-      const { size: artistsSize } = this.artistsById;
-      const artistId = CHANCE.integer({ min: 1, max: artistsSize });
-      const piecesByArtistId = this.piecesByArtistId.get(artistId) || [];        
-      
-      const relevantHeadshop = this.headshopsById.get(headshopId);   
-
-      if (seed === 'headshop') {
-
-        piece.headshopId = headshopId;
-        piece.owner = relevantHeadshop.name;
-        piece.address = relevantHeadshop.address;       
-        piece.phone = relevantHeadshop.phone;
-        piece.email = relevantHeadshop.email;
-
-        this.piecesById.set(nextId, piece);
-        this.piecesByHeadshopId.set(headshopId, [...piecesByHeadshopId, piece]);
-
-        count--;
-
-        continue;
-      }
-
-      if (seed === 'artist') {
-        const relevantArtist = this.artistsById.get(artistId);
-
-        piece.artistId = artistId;
-        piece.owner = relevantArtist.name;
-        piece.address = relevantArtist.address;
-        piece.phone = relevantArtist.phone;
-        piece.email = relevantArtist.email;
-
-        this.piecesById.set(nextId, piece);
-        this.piecesByArtistId.set(artistId, [...piecesByArtistId, piece]);
-
-        count--;
-
-        continue;
-      }
-
-            
-      piece.headshopId = headshopId;
-      piece.artistId = artistId;
-      piece.owner = relevantHeadshop.name;
-      piece.address = relevantHeadshop.address;       
-      piece.phone = relevantHeadshop.phone;
-      piece.email = relevantHeadshop.email;
-
-      this.piecesById.set(nextId, piece);
-      this.piecesByHeadshopId.set(headshopId, [...piecesByHeadshopId, piece]);
-      this.piecesByArtistId.set(artistId, [...piecesByArtistId, piece]);
-
-      count--;
-    }
-  }
-}
-
-const _DATABASE = new Database({
-  version: VERSION,
-});
-
-/* API */
-class API {
-  constructor(database) {
-    this.database = database;
-  }
-
-  getHeadshop(id) {
-    return JSON.stringify(this.database.headshopsById.get(+id));
-  }
-
-  getHeadshops() {
-    return JSON.stringify([...this.database.headshopsById]);
-  }
-
-  getArtist(id) {
-    return JSON.stringify(this.database.artistsById.get(+id));
-  }
-
-  getArtists() {
-    return JSON.stringify([...this.database.artistsById]);
-  }
-
-  getPiece(id) {
-    return JSON.stringify(this.database.piecesById.get(+id));
-  }
-
-  getPieces() {
-    return JSON.stringify([...this.database.piecesById]);
-  }
-
-  getPiecesByHeadshop(id) {        
-    return JSON.stringify(this.database.piecesByHeadshopId.get(+id));
-  }
-
-  getPiecesByArtist(id) {
-    return JSON.stringify(this.database.piecesByArtistId.get(+id));
-  }
-}
-
-const _API = new API(_DATABASE);
-
-/* Server */
 const express = require('express');
-const app = express();
-const port = process.env.PORT || 6166;
 
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
-  next();
-});
+const DEFAULT_PAGINATION_CONFIG = {
+  perPage: 10,
+};
 
-app.get('/', (req, res) => res.send(`Glassfinder API v. ${VERSION}`));
+/**
+ * @desc
+ * Glassfinder models:
+ *    1. HEADSHOP
+ *      a. Has many ARTIST, and
+ *      b. Has many COMPANY, and
+ *      c. Has many PIECE
+ * 
+ *    2. ARTIST
+ *      a. Has many HEADSHOP, and
+ *      b. Has many COMPANY, and
+ *      c. Has many PIECE
+ * 
+ *    3. COMPANY
+ *      a. Has many HEADSHOP, and
+ *      a. Has many ARTIST, and
+ *      c. Has many PIECE
+ * 
+ *    4. PIECE
+ *      a. Has one HEADSHOP, or
+ *      b. Has one ARTIST, or
+ *      c. Has one COMPANY
+ */
+class Model {
+  constructor(config) {
+    this.id = null;
+    this.name = null;
+    this.image = null;
+    this.phone = null;
+    this.email = null;
+    this.tagline = null;
+    this.description = null;
+    this.memberSince = null;
+    this.rating = null;
+    this.address = null;
+    this.position = null;
+    this.images = null;
+    this.associations = [];
 
-app.get('/headshops', (req, res) => {
-  res.send(_API.getHeadshops());
-});
+    Object.assign(this, config);
+  }
+}
 
-app.get('/headshops/:id', ({ params: { id } }, res) => {
-  res.send(_API.getHeadshop(id));
-});
+const MODELS = [
+  {
+    singular: 'headshop',
+    plural: 'headshops',
+    class: class Headshop extends Model {
+      constructor(config) {
+        super(config);
+        
+        this.artists = [];
+        this.companies = [];
+        this.pieces = [];
+      }
+    },
+  },
+  {
+    singular: 'artist',
+    plural: 'artists',
+    class: class Artist extends Model {
+      constructor(config) {
+        super(config);
+        
+        this.headshops = [];
+        this.companies = [];
+        this.pieces = [];
+      }
+    },
+  },
+  {
+    singular: 'company',
+    plural: 'companies',
+    class: class Company extends Model {
+      constructor(config) {
+        super(config);
+        
+        this.headshops = [];
+        this.artists = [];
+        this.pieces = [];
+      }
+    },
+  },
+  {
+    singular: 'pieces',
+    plural: 'pieces',
+    class: class Piece extends Model {
+      constructor(config) {
+        super(config);
 
-app.get('/artists', (req, res) => {
-  res.send(_API.getArtists());
-});
+        delete this.phone;
+        delete this.email;
+        delete this.memberSince;
+        delete this.address;
+        delete this.position;
 
-app.get('/artists/:id', ({ params: { id } }, res) => {
-  res.send(_API.getArtist(id));
-});
+        this.headshops = [];
+        this.artists = [];
+        this.companies = [];
+      }
+    },
+  },
+];
 
-app.get('/pieces', (req, res) => {
-  res.send(_API.getPieces());
-});
+class API {
+  constructor(paginationConfig = DEFAULT_PAGINATION_CONFIG) {
+    this.paginationConfig = paginationConfig;
 
-app.get('/pieces/:id', ({ params: { id } }, res) => {
-  res.send(_API.getPiece(id));
-});
+    this.initializeModels();
+  }
 
-app.get('/pieces/headshop/:id', ({ params: { id } }, res) => {
-  res.send(_API.getPiecesByHeadshop(id));
-});
+  /* Randomization */
+  generateModelConfig() {
+    return {
+      id: 0,
+      name: CHANCE.name(),
+      image: 'https://placehold.it/400x400',
+      images: [],
+      phone: `${ CHANCE.integer({ min: 100, max: 999 }) }-${ CHANCE.integer({ min: 100, max: 999 }) }-${ CHANCE.integer({ min: 1000, max: 9999 }) }`,
+      email: CHANCE.email(),
+      tagline: CHANCE.sentence({ words: 4 }),
+      description: CHANCE.paragraph({ sentences: 5 }),
+      memberSince: CHANCE.date({ string: true }),
+      price: CHANCE.dollar(),
+      rating: CHANCE.floating({ min: 0, max: 5, fixed: 2 }),
+      address: {
+        street: CHANCE.address(),
+        city: CHANCE.city(),
+        state: CHANCE.state(),
+        zip: CHANCE.zip(),
+      },
+      position: {
+        lat: CHANCE.latitude(),
+        lng: CHANCE.longitude(),
+      }
+    }
+  }
 
-app.get('/pieces/artist/:id', ({ params: { id } }, res) => {
-  res.send(_API.getPiecesByArtist(id));
-});
+  getModelCount(multiplier = 1) {
+    return CHANCE.integer({ min: 30, max: 600 }) * multiplier;
+  }
 
-app.listen(port, () => console.info(`Glassfinder API listening on port ${port}`));
+  getImageCount() {
+    return CHANCE.integer({ min: 3, max: 20 });
+  }
+
+  getAssociationCount() {
+    return CHANCE.integer({ min: 2, max: 10 });
+  }
+
+  /* Initialization */
+  /**
+   * @method initializeModel
+   * @desc Create a randomized collection and initialize associations for all models.
+   */
+  initializeModels() {
+    MODELS.forEach(model => this.initializeModelCollection(model.plural, model.class));
+    this.initializeAssociations();
+  }
+
+  /**
+   * @method initializeModelCollection
+   * @desc Given a model type and its relevant class,
+   *       return a collection of generated models matching said type.
+   * @param {string} type
+   * @param {class} ModelClass
+   * @returns {Array<Model>}
+   */
+  initializeModelCollection(type, ModelClass) {
+    const collection = [];
+
+    let count = 0;
+    let max = this.getModelCount();
+
+    if (type === 'piece') max = max * 10;
+
+    while (count < max) {
+      count++;
+
+      const model = this.generateModelConfig();      
+
+      model.id = count + '';
+
+      let imageCount = this.getImageCount();
+
+      while (imageCount) {
+        imageCount--;
+
+        model.images.push('http://placehold.it/400x400');
+      }
+
+      collection.push(new ModelClass(model));
+    }
+
+    this[type] = collection;
+  }
+
+  /**
+   * TODO: Do this alogirthmically.
+   * @method initializeAssociations
+   * @desc For each model in each model type collection, associate said
+   *       model with other models as specified.
+   */
+  initializeAssociations() {
+    this.initializeHeadshopAssociations();
+    this.initializeArtistAssociations();
+    this.initializePieceAssociations();
+  }
+
+  initializeHeadshopAssociations() {
+    this.headshops.forEach(headshop => {
+      let artistCount = this.getAssociationCount();
+      let companyCount = this.getAssociationCount();
+
+      while (artistCount) {
+        const index = CHANCE.integer({ min: 0, max: this.artists.length - 1 });
+        const artist = this.artists[index];
+
+        if (headshop.artists.includes(artist.id)) continue;
+
+        headshop.artists.push(artist.id);
+        artist.headshops.push(headshop.id);
+
+        artistCount--;
+      }
+
+      while (companyCount) {
+        const index = CHANCE.integer({ min: 0, max: this.companies.length - 1 });
+        const company = this.companies[index];
+
+        if (headshop.companies.includes(company.id)) continue;
+
+        headshop.companies.push(company.id);
+        company.headshops.push(headshop.id);
+
+        companyCount--;
+      }
+    });
+  }
+
+  initializeArtistAssociations() {
+    this.artists.forEach(artist => {
+      let companyCount = this.getAssociationCount();
+
+      while (companyCount) {
+        const index = CHANCE.integer({ min: 0, max: this.companies.length - 1 });
+        const company = this.companies[index];
+
+        if (artist.companies.includes(company.id)) continue;
+
+        artist.companies.push(company.id);
+        company.artists.push(artist.id);
+
+        companyCount--;
+      }
+    });
+  }
+
+  initializePieceAssociations() {
+    this.pieces.forEach(piece => {
+      const seed = CHANCE.integer({ min: 0, max: 2 });
+
+      if (seed === 0) {
+        const index = CHANCE.integer({ min: 0, max: this.headshops.length - 1 });
+        const headshop = this.headshops[index];
+
+        piece.headshops.push(headshop.id);
+        headshop.pieces.push(piece.id);
+
+        return;
+      }
+
+      if (seed === 1) {
+        const index = CHANCE.integer({ min: 0, max: this.artists.length - 1 });
+        const artist = this.artists[index];
+
+        piece.artists.push(artist.id);
+        artist.pieces.push(piece.id);
+
+        return;
+      }
+
+      if (seed === 2) {
+        const index = CHANCE.integer({ min: 0, max: this.companies.length - 1 });
+        const company = this.companies[index];
+
+        piece.companies.push(company.id);
+        company.pieces.push(piece.id);
+
+        return;
+      }
+    });
+  }
+
+  /* Pagination */
+  /**
+   * @desc Given a model type, split the collection
+   *       into a collection of pages are return the correct page.
+   * @param {string} model 
+   * @param {string} sort 
+   * @param {boolean} reversed 
+   * @returns {Array<Model>}
+   */
+  paginate(model, sort, reversed) {
+    const { perPage } = this.paginationConfig;
+    
+    const collection = !sort
+      ? this[model]
+      : this[model].sort((a, b) => b[sort] - a[sort]);
+
+    const finalCollection = !reversed
+      ? collection
+      : collection.reverse();
+
+    const factory = [];
+
+    for (let i = 0; i < finalCollection.length; i += perPage) {
+      factory.push(finalCollection.slice(i, i + perPage));
+    }
+
+    return factory;
+  }
+
+  /* Retrieval */
+  /**
+   * @method getModel
+   * @desc Given an id, return a single model.
+   * @param {number} id
+   * @returns {?Model}
+   */
+  getModel(model, id) {
+    return this[model].find(model => model.id === id) || null;
+  }
+
+  /**
+   * @method getModels
+   * @desc Given a model type, return a collection of that type.
+   * @param {string} model 
+   * @param {string} sort       What property should the collection sort by?
+   * @param {boolean} reversed  Should the collection be reversed?
+   * @returns {Array<Model>}
+   */
+  getModels(model, page = 0, sort, reversed) {
+    const collection = this.paginate(model, sort, reversed);
+    
+    return collection[page];
+  }
+
+  /* Express */
+  /**
+   * Create the API application and listen in on a given port.
+   * @param {number} port 
+   * @returns {Express}
+   */
+  generateApp(port = process.env.PORT || 6166) {
+    const app = express();
+
+    app.use((req, res, next) => {
+      res.header('Access-Control-Allow-Origin', '*');
+      res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+      next();
+    });
+
+    MODELS.forEach(model => {
+      // Master
+      app.get(`/${model.plural}`, (req, res) => {
+        const { page, sort, reversed } = req.query;
+
+        res.send(JSON.stringify(
+          this.getModels(model.plural, page, sort, reversed)
+        ));
+      });
+
+      // Detail
+      app.get(`/${model.singular}/:id`, ({ params: { id } }, res) => {
+        res.send(JSON.stringify(
+          this.getModel(model.plural, id)
+        ));
+      });
+    });
+
+    app.listen(port, console.info(`Glassfinder API listening on port ${port}.`));
+
+    return app;
+  }
+}
+
+const app = (new API()).generateApp();
