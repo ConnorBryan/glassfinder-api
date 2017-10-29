@@ -17,7 +17,7 @@ const CHANCE = new (require('chance'))();
 const express = require('express');
 const MODELS = require('./models');
 const DEFAULT_PAGINATION_CONFIG = {
-  perPage: 10,
+  perPage: 5,
 };
 
 class API {
@@ -261,7 +261,11 @@ class API {
   getModels(model, page = 0, sort, reversed) {
     const collection = this.paginate(model, sort, reversed);
 
-    return collection[page];
+    return { collection: collection[page], collectionSize: collection.length };
+  }
+
+  getMapmarkers() {
+    return this.headshops
   }
 
   /* Express */
@@ -282,11 +286,10 @@ class API {
     MODELS.forEach(model => {
       // Master
       app.get(`/${model.plural}`, (req, res) => {
-        const { page, sort, reversed } = req.query;
+        const { page, sort, reversed, full } = req.query;
+        const { collection, collectionSize } = this.getModels(model.plural, page, sort, reversed);
 
-        res.send(JSON.stringify(
-          this.getModels(model.plural, page, sort, reversed)
-        ));
+        res.send(JSON.stringify({ collection, collectionSize }));
       });
 
       // Detail
@@ -295,6 +298,12 @@ class API {
           this.getModel(model.plural, id)
         ));
       });
+    });
+
+    app.get('/mapmarkers', (req, res) => {
+      res.send(JSON.stringify(
+        this.getMapmarkers()
+      ))
     });
 
     app.listen(port, console.info(`Glassfinder API listening on port ${port}.`));
