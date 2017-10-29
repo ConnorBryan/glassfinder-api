@@ -278,6 +278,7 @@ class API {
     const app = express();
 
     app.use((req, res, next) => {
+      console.log(req);
       res.header('Access-Control-Allow-Origin', '*');
       res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
       next();
