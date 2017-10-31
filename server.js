@@ -264,6 +264,19 @@ class API {
     return { collection: collection[page], collectionSize: collection.length };
   }
 
+  /**
+   * @method getModelsFromIds
+   * @desc Given an array of IDs, translate those IDs to models.
+   * @param {string} model 
+   * @param {Array<string>} ids 
+   * @returns {Array<Model>}
+   */
+  getModelsFromIds(model, ids) {
+    const valid = ids.reduce((acc, cur) => { acc[cur] = 1; return acc; }, {});
+    
+    return this[model].filter(({ id }) => valid[id]);
+  }
+
   getMapmarkers() {
     return this.headshops
   }
@@ -278,7 +291,6 @@ class API {
     const app = express();
 
     app.use((req, res, next) => {
-      console.log(req);
       res.header('Access-Control-Allow-Origin', '*');
       res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
       next();
@@ -297,6 +309,15 @@ class API {
       app.get(`/${model.singular}/:id`, ({ params: { id } }, res) => {
         res.send(JSON.stringify(
           this.getModel(model.plural, id)
+        ));
+      });
+
+      // ID -> Model
+      app.get(`/${model.plural}ById/`, ({ query: { collection = '' } }, res) => {
+        const ids = collection.split(',');
+
+        res.send(JSON.stringify(
+          this.getModelsFromIds(model.plural, ids)
         ));
       });
     });
