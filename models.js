@@ -82,7 +82,7 @@ module.exports = [
     },
   },
   {
-    singular: 'pieces',
+    singular: 'piece',
     plural: 'pieces',
     class: class Piece extends Model {
       constructor(config) {

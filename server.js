@@ -297,6 +297,7 @@ class API {
     });
 
     MODELS.forEach(model => {
+      console.log(model.singular)
       // Master
       app.get(`/${model.plural}`, (req, res) => {
         const { page, sort, reversed, full } = req.query;
