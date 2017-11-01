@@ -16,6 +16,7 @@
 const CHANCE = new (require('chance'))();
 const express = require('express');
 const MODELS = require('./models');
+
 const DEFAULT_PAGINATION_CONFIG = {
   perPage: 5,
 };
@@ -90,7 +91,7 @@ class API {
     let count = 0;
     let max = this.getModelCount();
 
-    if (type === 'piece') max = max * 10;
+    if (type === 'pieces') max *= 50;
 
     while (count < max) {
       count++;
@@ -296,8 +297,12 @@ class API {
       next();
     });
 
+    // Synthetic latency.
+    // app.use((req, res, next) => {
+    //   setTimeout(next, CHANCE.integer({ min: 200, max: 2000 }));
+    // });
+
     MODELS.forEach(model => {
-      console.log(model.singular)
       // Master
       app.get(`/${model.plural}`, (req, res) => {
         const { page, sort, reversed, full } = req.query;
