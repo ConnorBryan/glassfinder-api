@@ -14,7 +14,6 @@
  *      Returns: A single model at the given ID.
  */
 const CHANCE = new (require('chance'))();
-const express = require('express');
 const MODELS = require('./models');
 
 const DEFAULT_PAGINATION_CONFIG = {
@@ -24,7 +23,7 @@ const DEFAULT_PAGINATION_CONFIG = {
 class API {
   constructor(paginationConfig = DEFAULT_PAGINATION_CONFIG) {
     this.paginationConfig = paginationConfig;
-
+    this.generateApp = require('./app').bind(this);
     this.initializeModels();
   }
 
@@ -280,63 +279,6 @@ class API {
 
   getMapmarkers() {
     return this.headshops
-  }
-
-  /* Express */
-  /**
-   * Create the API application and listen in on a given port.
-   * @param {number} port 
-   * @returns {Express}
-   */
-  generateApp(port = process.env.PORT || 6166) {
-    const app = express();
-
-    app.use((req, res, next) => {
-      res.header('Access-Control-Allow-Origin', '*');
-      res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
-      next();
-    });
-
-    // Synthetic latency.
-    // app.use((req, res, next) => {
-    //   setTimeout(next, CHANCE.integer({ min: 200, max: 2000 }));
-    // });
-
-    MODELS.forEach(model => {
-      // Master
-      app.get(`/${model.plural}`, (req, res) => {
-        const { page, sort, reversed, full } = req.query;
-        const { collection, collectionSize } = this.getModels(model.plural, page, sort, reversed);
-
-        res.send(JSON.stringify({ collection, collectionSize }));
-      });
-
-      // Detail
-      app.get(`/${model.singular}/:id`, ({ params: { id } }, res) => {
-        res.send(JSON.stringify(
-          this.getModel(model.plural, id)
-        ));
-      });
-
-      // ID -> Model
-      app.get(`/${model.plural}ById/`, ({ query: { collection = '' } }, res) => {
-        const ids = collection.split(',');
-
-        res.send(JSON.stringify(
-          this.getModelsFromIds(model.plural, ids)
-        ));
-      });
-    });
-
-    app.get('/mapmarkers', (req, res) => {
-      res.send(JSON.stringify(
-        this.getMapmarkers()
-      ))
-    });
-
-    app.listen(port, console.info(`Glassfinder API listening on port ${port}.`));
-
-    return app;
   }
 }
 
